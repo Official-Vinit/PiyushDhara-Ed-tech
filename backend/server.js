@@ -2,6 +2,7 @@ const express = require('express');
 const mongoose = require('mongoose');
 const cors = require('cors');
 const path = require('path');
+require('dotenv').config();
 
 // Initialize the app
 const app = express();
@@ -16,7 +17,7 @@ app.use(express.json()); // Allow app to accept JSON
 app.use('/api', require('./routes/api'));
 
 // --- Database Connection ---
-const MONGO_URI = "mongodb+srv://piyushDhara:piyushDhara@piyushdhara.t7hruyw.mongodb.net/?appName=PiyushDhara";
+const MONGO_URI = process.env.MONGO_URI;
 mongoose.connect(MONGO_URI)
   .then(() => console.log('MongoDB connected successfully!'))
   .catch(err => console.error('MongoDB connection error:', err));
