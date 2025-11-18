@@ -1,0 +1,34 @@
+# Use the Node.js runtime
+runtime: nodejs18
+
+# Set the instance class (F1 is free-tier eligible)
+instance_class: F1
+
+# Tell GAE how to start your app. "npm start" runs "nodemon server.js"
+# In production, we should run "node server.js". Let's update package.json
+entrypoint: npm start
+
+# Pass our MongoDB connection string as an environment variable
+# This is much more secure than hard-coding it.
+env_variables:
+  MONGO_URI: "mongodb+srv://piyushDhara:piyushDhara@piyushdhara.t7hruyw.mongodb.net/?appName=PiyushDhara"
+
+# Define how to handle different types of URLs
+handlers:
+  # 1. API Calls: Any URL starting with /api is handled by our server.js
+  - url: /api/.*
+    script: auto
+    secure: always
+
+  # 2. Static Files: Serve built CSS, JS, etc., directly from the dist folder
+  - url: /(.*\.(js|css|svg|png|jpg|ico))$
+    static_files: dist/\1
+    upload: dist/.*\.(js|css|svg|png|jpg|ico)$
+    secure: always
+
+  # 3. The React App: For any other URL (like / or /courses/...),
+  #    serve the index.html file so React Router can take over.
+  - url: /.*
+    static_files: dist/index.html
+    upload: dist/index.html
+    secure: always
