@@ -48,7 +48,14 @@ function Sidebar({ isOpen, closeSidebar }) {
         <div className="p-6 h-full overflow-y-auto">
           {/* Header with Close Button (Mobile Only) */}
           <div className="flex justify-between items-center mb-8">
-            <h1 className="text-2xl font-bold text-gray-800">PiyushDhara</h1>
+             {/* LOGO IMAGE */}
+             <Link to="/">
+               <img 
+                 src="/logo.png" 
+                 alt="PiyushDhara Logo" 
+                 className="h-12 w-auto object-contain" // Adjust h-12 to make it bigger/smaller
+               />
+             </Link>
             
             {/* Close 'X' Button - Only visible on Mobile */}
             <button 

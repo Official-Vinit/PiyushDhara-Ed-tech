@@ -29,9 +29,12 @@ function MainLayout() {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
             </svg>
           </button>
-          <span className="ml-4 font-bold text-xl text-gray-800">PiyushDhara</span>
+          <img 
+            src="/logo.png" 
+            alt="PiyushDhara Logo" 
+            className="ml-4 h-8 w-auto object-contain" // h-8 is usually good for mobile bars
+          />        
         </div>
-
         {/* Page Content */}
         <main className="flex-1 overflow-y-auto p-4 md:p-8">
           <Outlet />
