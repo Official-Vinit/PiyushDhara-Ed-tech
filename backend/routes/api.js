@@ -7,13 +7,44 @@ const Course = require('../models/Course');
 const Subject = require('../models/Subject');
 const Unit = require('../models/Unit');
 
+const jwt = require('jsonwebtoken');
+require('dotenv').config();
+const auth = require('../middleware/auth');
+
+
+// --- AUTH ROUTE ---
+router.post('/login', (req, res) => {
+  const { username, password } = req.body;
+
+  // Check credentials against .env
+  if (
+    username === process.env.ADMIN_USERNAME && 
+    password === process.env.ADMIN_PASSWORD
+  ) {
+    // Success: Create a token
+    const payload = { user: { id: 'admin' } };
+
+    jwt.sign(
+      payload, 
+      process.env.JWT_SECRET, 
+      { expiresIn: '4h' }, // Token lasts for 4 hours
+      (err, token) => {
+        if (err) throw err;
+        res.json({ token });
+      }
+    );
+  } else {
+    res.status(400).json({ msg: 'Invalid Credentials' });
+  }
+});
+
 // --- COURSE ROUTES ---
 
 /**
  * @route   GET /api/courses
  * @desc    Get all courses (for the sidebar)
  */
-router.get('/courses', async (req, res) => {
+router.get('/courses',  async (req, res) => {
   try {
     // Find all courses and populate their 'subjects' field
     // This replaces the Subject IDs with the actual Subject documents
@@ -78,7 +109,7 @@ router.get('/units/:unitId', async (req, res) => {
  * @route   POST /api/courses
  * @desc    Create a new course
  */
-router.post('/courses', async (req, res) => {
+router.post('/courses', auth, async (req, res) => {
   try {
     // We get the name from the request body
     const { name } = req.body;
@@ -109,7 +140,7 @@ router.post('/courses', async (req, res) => {
  * @route   DELETE /api/courses/:courseId
  * @desc    Delete a course
  */
-router.delete('/courses/:courseId', async (req, res) => {
+router.delete('/courses/:courseId', auth, async (req, res) => {
   try {
     const course = await Course.findById(req.params.courseId);
 
@@ -138,7 +169,7 @@ router.delete('/courses/:courseId', async (req, res) => {
  * @route   POST /api/subjects
  * @desc    Create a new subject for a specific course
  */
-router.post('/subjects', async (req, res) => {
+router.post('/subjects', auth, async (req, res) => {
   // We need two things: the name, and the ID of the course it belongs to
   const { name, courseId } = req.body;
 
@@ -180,7 +211,7 @@ router.post('/subjects', async (req, res) => {
  * @route   DELETE /api/subjects/:subjectId
  * @desc    Delete a subject
  */
-router.delete('/subjects/:subjectId', async (req, res) => {
+router.delete('/subjects/:subjectId', auth, async (req, res) => {
   try {
     const subject = await Subject.findById(req.params.subjectId);
 
@@ -213,7 +244,7 @@ router.delete('/subjects/:subjectId', async (req, res) => {
  * @route   POST /api/units
  * @desc    Create a new unit for a specific subject
  */
-router.post('/units', async (req, res) => {
+router.post('/units', auth, async (req, res) => {
   // We need the unit's name and the ID of the subject it belongs to
   const { name, subjectId } = req.body;
 
@@ -255,7 +286,7 @@ router.post('/units', async (req, res) => {
  * @route   DELETE /api/units/:unitId
  * @desc    Delete a unit
  */
-router.delete('/units/:unitId', async (req, res) => {
+router.delete('/units/:unitId', auth, async (req, res) => {
   try {
     const unit = await Unit.findById(req.params.unitId);
 
@@ -286,7 +317,7 @@ router.delete('/units/:unitId', async (req, res) => {
  * @route   PUT /api/units/:unitId/videos
  * @desc    Add a video to a unit
  */
-router.put('/units/:unitId/videos', async (req, res) => {
+router.put('/units/:unitId/videos', auth, async (req, res) => {
   // Get the video details from the request body
   const { title, youtubeId, duration } = req.body;
 
@@ -318,7 +349,7 @@ router.put('/units/:unitId/videos', async (req, res) => {
  * @route   DELETE /api/units/:unitId/videos/:videoId
  * @desc    Delete a video from a unit
  */
-router.delete('/units/:unitId/videos/:videoId', async (req, res) => {
+router.delete('/units/:unitId/videos/:videoId', auth, async (req, res) => {
   try {
     const unit = await Unit.findById(req.params.unitId);
     if (!unit) {
@@ -341,7 +372,7 @@ router.delete('/units/:unitId/videos/:videoId', async (req, res) => {
  * @route   PUT /api/units/:unitId/notes
  * @desc    Add a note to a unit
  */
-router.put('/units/:unitId/notes', async (req, res) => {
+router.put('/units/:unitId/notes', auth, async (req, res) => {
   const { title, url } = req.body;
 
   if (!title || !url) {
@@ -371,7 +402,7 @@ router.put('/units/:unitId/notes', async (req, res) => {
  * @route   DELETE /api/units/:unitId/notes/:noteId
  * @desc    Delete a note from a unit
  */
-router.delete('/units/:unitId/notes/:noteId', async (req, res) => {
+router.delete('/units/:unitId/notes/:noteId', auth, async (req, res) => {
   try {
     const unit = await Unit.findById(req.params.unitId);
     if (!unit) {
@@ -390,7 +421,7 @@ router.delete('/units/:unitId/notes/:noteId', async (req, res) => {
   }
 });
 
-router.post('/seed', async (req, res) => {
+router.post('/seed', auth, async (req, res) => {
   try {
     // Clear existing data
     await Course.deleteMany({});
