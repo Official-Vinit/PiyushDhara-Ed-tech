@@ -11,7 +11,15 @@ const CourseSchema = new Schema({
   subjects: [{
     type: Schema.Types.ObjectId,
     ref: 'Subject' 
-  }]
+  }],
+  teacher: {
+    type: String,
+    default: 'Gaurav Sir'  // Default fallback
+  },
+  teacherImage: {
+    type: String,
+    default: '' 
+  },
 });
 
 module.exports = mongoose.model('Course', CourseSchema);

@@ -110,9 +110,9 @@ router.get('/units/:unitId', async (req, res) => {
  * @desc    Create a new course
  */
 router.post('/courses', auth, async (req, res) => {
+
   try {
-    // We get the name from the request body
-    const { name } = req.body;
+  const { name, description, teacher, teacherImage } = req.body;
 
     if (!name) {
       return res.status(400).json({ msg: 'Please provide a name for the course' });
@@ -120,7 +120,9 @@ router.post('/courses', auth, async (req, res) => {
 
     // Create a new course instance
     const newCourse = new Course({
-      name: name
+      name: name,
+      teacher: teacher || 'Gaurav Sir',
+      teacherImage: teacherImage || ''
       // subjects array is empty by default
     });
 

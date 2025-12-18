@@ -1,113 +1,121 @@
-// src/pages/ManageCourses.jsx
+// admin-client/src/pages/ManageCourses.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import API_URL from '../config';
 
 function ManageCourses() {
   const [courses, setCourses] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState(null);
+  
+  // Form States
+  const [name, setName] = useState('');
+  const [teacher, setTeacher] = useState('');
+  const [teacherImage, setTeacherImage] = useState('');
 
-  // State for the "Create New Course" form
-  const [newCourseName, setNewCourseName] = useState('');
-
-  // 1. Fetch all courses when component loads
+  // Fetch courses on load
   useEffect(() => {
     fetchCourses();
   }, []);
 
   const fetchCourses = () => {
-    setLoading(true);
-    // We can use '/api' because of our Vite proxy!
     axios.get(`${API_URL}/api/courses`)
-      .then(response => {
-        setCourses(response.data);
-        setLoading(false);
-      })
-      .catch(error => {
-        console.error('Error fetching courses:', error);
-        setError('Failed to load courses.');
-        setLoading(false);
-      });
+      .then(res => setCourses(res.data))
+      .catch(err => console.error(err));
   };
 
-  // 2. Handle the "Create" form submission
-  const handleCreateCourse = (e) => {
-    e.preventDefault(); // Stop the form from reloading the page
-    if (!newCourseName) {
-      alert('Please enter a course name.');
-      return;
-    }
-
-    axios.post(`${API_URL}/api/courses`, { name: newCourseName })
-      .then(response => {
-        // Success! Add the new course to our list and clear the form
-        setCourses([...courses, response.data]);
-        setNewCourseName('');
+  const handleAddCourse = (e) => {
+    e.preventDefault();
+    axios.post(`${API_URL}/api/courses`, { 
+      name, 
+      teacher,       // Sending new field
+      teacherImage   // Sending new field
+    })
+      .then(res => {
+        // Add new course to list
+        setCourses([...courses, res.data]);
+        // Reset Form
+        setName('');
+        setTeacher('');
+        setTeacherImage('');
       })
-      .catch(error => {
-        console.error('Error creating course:', error);
-        alert('Failed to create course.');
-      });
+      .catch(err => console.error(err));
   };
 
-  // 3. Handle the "Delete" button click
-  const handleDeleteCourse = (courseId) => {
-    if (!window.confirm('Are you sure you want to delete this course?')) {
-      return;
-    }
-
-    axios.delete(`${API_URL}/api/courses/${courseId}`)
-      .then(response => {
-        // Success! Filter the deleted course out of our list
-        setCourses(courses.filter(course => course._id !== courseId));
-      })
-      .catch(error => {
-        console.error('Error deleting course:', error);
-        alert('Failed to delete course.');
-      });
+  const handleDeleteCourse = (id) => {
+    if(!window.confirm("Are you sure? This will delete all subjects inside!")) return;
+    axios.delete(`${API_URL}/api/courses/${id}`)
+      .then(() => setCourses(courses.filter(c => c._id !== id)))
+      .catch(err => console.error(err));
   };
 
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">Manage Courses</h1>
+      
+      {/* --- ADD COURSE FORM --- */}
+      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
+        <h2 className="text-xl font-semibold mb-4">Add New Course</h2>
+        <form onSubmit={handleAddCourse} className="space-y-4">
+          
+          {/* Course Name */}
+          <div>
+            <label className="block text-gray-700 font-medium mb-1">Course Name</label>
+            <input 
+              type="text" 
+              value={name} 
+              onChange={(e) => setName(e.target.value)} 
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
+              placeholder="e.g. Civil Engineering"
+              required 
+            />
+          </div>
 
-      {/* CREATE COURSE FORM */}
-      <form onSubmit={handleCreateCourse} className="mb-8 p-6 bg-white rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold mb-3">Create New Course</h2>
-        <div className="flex">
-          <input
-            type="text"
-            value={newCourseName}
-            onChange={(e) => setNewCourseName(e.target.value)}
-            placeholder="E.g., Mechanical Engineering"
-            className="flex-grow p-3 border rounded-l-md"
-          />
-          <button type="submit" className="bg-blue-500 text-white p-3 rounded-r-md hover:bg-blue-600">
-            Create
+          {/* Teacher Name */}
+          <div>
+            <label className="block text-gray-700 font-medium mb-1">Teacher Name</label>
+            <input 
+              type="text" 
+              value={teacher} 
+              onChange={(e) => setTeacher(e.target.value)} 
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
+              placeholder="e.g. Mrigank Sir"
+            />
+          </div>
+
+          {/* Teacher Image URL */}
+          <div>
+            <label className="block text-gray-700 font-medium mb-1">Teacher Image URL (Optional)</label>
+            <input 
+              type="url" 
+              value={teacherImage} 
+              onChange={(e) => setTeacherImage(e.target.value)} 
+              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
+              placeholder="e.g. https://imgur.com/..."
+            />
+            <p className="text-xs text-gray-500 mt-1">Leave empty to generate a default avatar.</p>
+          </div>
+
+          <button type="submit" className="bg-green-600 text-white py-2 px-6 rounded hover:bg-green-700 font-medium">
+            Add Course
           </button>
-        </div>
-      </form>
+        </form>
+      </div>
 
-      {/* LIST OF COURSES */}
-      <div className="bg-white rounded-lg shadow-md">
-        <h2 className="text-xl font-semibold p-6 border-b">Existing Courses</h2>
-        {loading && <p className="p-6">Loading...</p>}
-        {error && <p className="p-6 text-red-500">{error}</p>}
-
-        <ul className="divide-y divide-gray-200">
-          {courses.map(course => (
-            <li key={course._id} className="flex justify-between items-center p-6">
-              <span className="text-lg font-medium">{course.name}</span>
-              <button
-                onClick={() => handleDeleteCourse(course._id)}
-                className="bg-red-500 text-white py-1 px-3 rounded-md hover:bg-red-600"
-              >
-                Delete
-              </button>
-            </li>
-          ))}
-        </ul>
+      {/* --- EXISTING COURSES LIST --- */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        {courses.map(course => (
+          <div key={course._id} className="bg-white p-6 rounded-lg shadow border flex justify-between items-center">
+            <div>
+              <h3 className="text-xl font-bold text-blue-600">{course.name}</h3>
+              <p className="text-gray-600 text-sm">By {course.teacher || 'Mrigank Sir'}</p>
+            </div>
+            <button 
+              onClick={() => handleDeleteCourse(course._id)}
+              className="text-red-500 hover:text-red-700 font-medium"
+            >
+              Delete
+            </button>
+          </div>
+        ))}
       </div>
     </div>
   );
