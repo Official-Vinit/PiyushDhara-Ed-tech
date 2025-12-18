@@ -215,6 +215,17 @@ router.put('/units/:id', auth, async (req, res) => {
   }
 });
 
+// --- GET SINGLE SUBJECT (WITH UNITS) ---
+router.get('/subjects/:id', async (req, res) => {
+  try {
+    // .populate('units') is the magic word that grabs the full unit details
+    const subject = await Subject.findById(req.params.id).populate('units');
+    res.json(subject);
+  } catch (err) {
+    res.status(500).json({ msg: 'Server Error' });
+  }
+});
+
 
 /**
  * @route   POST /api/subjects
