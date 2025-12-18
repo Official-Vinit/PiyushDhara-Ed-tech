@@ -8,8 +8,12 @@ function ManageCourses() {
   
   // Form States
   const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
   const [teacher, setTeacher] = useState('');
   const [teacherImage, setTeacherImage] = useState('');
+  
+  // EDIT MODE STATE
+  const [editingId, setEditingId] = useState(null); // Stores ID of course being edited
 
   // Fetch courses on load
   useEffect(() => {
@@ -22,24 +26,47 @@ function ManageCourses() {
       .catch(err => console.error(err));
   };
 
-  const handleAddCourse = (e) => {
+  // --- HANDLE FORM SUBMIT (Create OR Update) ---
+  const handleSubmit = (e) => {
     e.preventDefault();
-    axios.post(`${API_URL}/api/courses`, { 
-      name, 
-      teacher,       // Sending new field
-      teacherImage   // Sending new field
-    })
-      .then(res => {
-        // Add new course to list
-        setCourses([...courses, res.data]);
-        // Reset Form
-        setName('');
-        setTeacher('');
-        setTeacherImage('');
-      })
-      .catch(err => console.error(err));
+
+    const courseData = { name, description, teacher, teacherImage };
+
+    if (editingId) {
+      // --- UPDATE MODE ---
+      axios.put(`${API_URL}/api/courses/${editingId}`, courseData)
+        .then(res => {
+          // Update the list locally without refreshing
+          setCourses(courses.map(course => 
+            course._id === editingId ? res.data : course
+          ));
+          resetForm();
+        })
+        .catch(err => console.error(err));
+    } else {
+      // --- CREATE MODE ---
+      axios.post(`${API_URL}/api/courses`, courseData)
+        .then(res => {
+          setCourses([...courses, res.data]);
+          resetForm();
+        })
+        .catch(err => console.error(err));
+    }
   };
 
+  // --- EDIT BUTTON CLICKED ---
+  const handleEditClick = (course) => {
+    setEditingId(course._id); // Turn on Edit Mode
+    setName(course.name);
+    setDescription(course.description || '');
+    setTeacher(course.teacher || '');
+    setTeacherImage(course.teacherImage || '');
+    
+    // Scroll to top to see the form
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  };
+
+  // --- DELETE BUTTON CLICKED ---
   const handleDeleteCourse = (id) => {
     if(!window.confirm("Are you sure? This will delete all subjects inside!")) return;
     axios.delete(`${API_URL}/api/courses/${id}`)
@@ -47,14 +74,26 @@ function ManageCourses() {
       .catch(err => console.error(err));
   };
 
+  // --- RESET FORM ---
+  const resetForm = () => {
+    setEditingId(null); // Turn off Edit Mode
+    setName('');
+    setDescription('');
+    setTeacher('');
+    setTeacherImage('');
+  };
+
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">Manage Courses</h1>
       
-      {/* --- ADD COURSE FORM --- */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8">
-        <h2 className="text-xl font-semibold mb-4">Add New Course</h2>
-        <form onSubmit={handleAddCourse} className="space-y-4">
+      {/* --- FORM (Dynamic Title & Buttons) --- */}
+      <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-l-4 border-blue-500">
+        <h2 className="text-xl font-semibold mb-4">
+          {editingId ? 'Edit Course' : 'Add New Course'}
+        </h2>
+        
+        <form onSubmit={handleSubmit} className="space-y-4">
           
           {/* Course Name */}
           <div>
@@ -64,7 +103,6 @@ function ManageCourses() {
               value={name} 
               onChange={(e) => setName(e.target.value)} 
               className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
-              placeholder="e.g. Civil Engineering"
               required 
             />
           </div>
@@ -77,26 +115,41 @@ function ManageCourses() {
               value={teacher} 
               onChange={(e) => setTeacher(e.target.value)} 
               className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
-              placeholder="e.g. Mrigank Sir"
             />
           </div>
 
           {/* Teacher Image URL */}
           <div>
-            <label className="block text-gray-700 font-medium mb-1">Teacher Image URL (Optional)</label>
+            <label className="block text-gray-700 font-medium mb-1">Teacher Image URL</label>
             <input 
               type="url" 
               value={teacherImage} 
               onChange={(e) => setTeacherImage(e.target.value)} 
               className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
-              placeholder="e.g. https://imgur.com/..."
             />
-            <p className="text-xs text-gray-500 mt-1">Leave empty to generate a default avatar.</p>
           </div>
 
-          <button type="submit" className="bg-green-600 text-white py-2 px-6 rounded hover:bg-green-700 font-medium">
-            Add Course
-          </button>
+          <div className="flex space-x-3">
+            <button 
+              type="submit" 
+              className={`py-2 px-6 rounded font-medium text-white transition-colors
+                ${editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}
+              `}
+            >
+              {editingId ? 'Update Course' : 'Add Course'}
+            </button>
+            
+            {/* Show Cancel button only when editing */}
+            {editingId && (
+              <button 
+                type="button" 
+                onClick={resetForm}
+                className="py-2 px-6 rounded font-medium bg-gray-300 text-gray-700 hover:bg-gray-400"
+              >
+                Cancel
+              </button>
+            )}
+          </div>
         </form>
       </div>
 
@@ -108,12 +161,24 @@ function ManageCourses() {
               <h3 className="text-xl font-bold text-blue-600">{course.name}</h3>
               <p className="text-gray-600 text-sm">By {course.teacher || 'Mrigank Sir'}</p>
             </div>
-            <button 
-              onClick={() => handleDeleteCourse(course._id)}
-              className="text-red-500 hover:text-red-700 font-medium"
-            >
-              Delete
-            </button>
+            
+            <div className="flex space-x-2">
+              {/* EDIT BUTTON */}
+              <button 
+                onClick={() => handleEditClick(course)}
+                className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded hover:bg-yellow-200 font-medium"
+              >
+                Edit
+              </button>
+              
+              {/* DELETE BUTTON */}
+              <button 
+                onClick={() => handleDeleteCourse(course._id)}
+                className="bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 font-medium"
+              >
+                Delete
+              </button>
+            </div>
           </div>
         ))}
       </div>

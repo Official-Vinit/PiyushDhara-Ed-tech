@@ -1,4 +1,4 @@
-// src/pages/ManageSubjects.jsx
+// admin-client/src/pages/ManageSubjects.jsx
 import React, { useState, useEffect } from 'react';
 import axios from 'axios';
 import API_URL from '../config';
@@ -7,143 +7,176 @@ function ManageSubjects() {
   const [courses, setCourses] = useState([]);
   const [selectedCourseId, setSelectedCourseId] = useState('');
   const [subjects, setSubjects] = useState([]);
+  
+  const [name, setName] = useState('');
   const [loading, setLoading] = useState(false);
+  const [editingId, setEditingId] = useState(null); // ID of subject being edited
 
-  // State for the "Create New Subject" form
-  const [newSubjectName, setNewSubjectName] = useState('');
-
-  // 1. Fetch all courses (for the dropdown)
+  // 1. Fetch all courses on load
   useEffect(() => {
     axios.get(`${API_URL}/api/courses`)
-      .then(response => {
-        setCourses(response.data);
-        // If there are courses, select the first one by default
-        if (response.data.length > 0) {
-          setSelectedCourseId(response.data[0]._id);
-        }
-      })
-      .catch(error => console.error('Error fetching courses:', error));
+      .then(res => setCourses(res.data))
+      .catch(err => console.error(err));
   }, []);
 
-  // 2. Fetch subjects whenever the selectedCourseId changes
+  // 2. Fetch subjects when a course is selected
   useEffect(() => {
-    if (!selectedCourseId) {
-      setSubjects([]); // Clear subjects if no course is selected
-      return;
+    if (selectedCourseId) {
+      setLoading(true);
+      // Find the selected course object to get its subjects
+      // Note: This relies on the /courses endpoint returning populated subjects
+      // If it doesn't, we might need a specific /courses/:id call.
+      // Let's try the safer way: fetching the specific course details.
+      axios.get(`${API_URL}/api/courses/${selectedCourseId}`)
+        .then(res => {
+          setSubjects(res.data.subjects || []);
+          setLoading(false);
+        })
+        .catch(err => {
+          console.error(err);
+          setLoading(false);
+        });
+    } else {
+      setSubjects([]);
     }
+  }, [selectedCourseId]);
 
-    setLoading(true);
-    // We fetch the full course details, which includes its subjects
-    axios.get(`${API_URL}/api/courses/${selectedCourseId}`)
-      .then(response => {
-        // The 'subjects' array in the response is already populated!
-        setSubjects(response.data.subjects);
-        setLoading(false);
-      })
-      .catch(error => {
-        console.error('Error fetching subjects:', error);
-        setLoading(false);
-      });
-  }, [selectedCourseId]); // This is the dependency
-
-  // 3. Handle the "Create" form submission
-  const handleCreateSubject = (e) => {
+  // 3. Handle Submit (Create or Update)
+  const handleSubmit = (e) => {
     e.preventDefault();
-    if (!newSubjectName) {
-      alert('Please enter a subject name.');
-      return;
-    }
+    if (!selectedCourseId) return alert("Please select a course first.");
 
-    axios.post(`${API_URL}/api/subjects`, { name: newSubjectName, courseId: selectedCourseId })
-      .then(response => {
-        // Add the new subject to our list and clear the form
-        setSubjects([...subjects, response.data]);
-        setNewSubjectName('');
+    if (editingId) {
+      // --- UPDATE MODE ---
+      axios.put(`${API_URL}/api/subjects/${editingId}`, { name })
+        .then(res => {
+          // Update local list
+          setSubjects(subjects.map(sub => 
+            sub._id === editingId ? res.data : sub
+          ));
+          resetForm();
+        })
+        .catch(err => console.error(err));
+    } else {
+      // --- CREATE MODE ---
+      axios.post(`${API_URL}/api/subjects`, { 
+        name, 
+        courseId: selectedCourseId 
       })
-      .catch(error => {
-        console.error('Error creating subject:', error);
-        alert('Failed to create subject.');
-      });
+        .then(res => {
+          setSubjects([...subjects, res.data]);
+          resetForm();
+        })
+        .catch(err => console.error(err));
+    }
   };
 
-  // 4. Handle the "Delete" button click
-  const handleDeleteSubject = (subjectId) => {
-    if (!window.confirm('Are you sure you want to delete this subject?')) {
-      return;
-    }
+  // 4. Handle Edit Click
+  const handleEditClick = (subject) => {
+    setEditingId(subject._id);
+    setName(subject.name);
+  };
 
-    axios.delete(`${API_URL}/api/subjects/${subjectId}`)
-      .then(response => {
-        // Filter the deleted subject out of our list
-        setSubjects(subjects.filter(subject => subject._id !== subjectId));
+  // 5. Handle Delete
+  const handleDelete = (id) => {
+    if(!window.confirm("Delete this subject? All units inside will be lost!")) return;
+    axios.delete(`${API_URL}/api/subjects/${id}`)
+      .then(() => {
+        setSubjects(subjects.filter(sub => sub._id !== id));
       })
-      .catch(error => {
-        console.error('Error deleting subject:', error);
-        alert('Failed to delete subject.');
-      });
+      .catch(err => console.error(err));
+  };
+
+  // 6. Reset Form
+  const resetForm = () => {
+    setName('');
+    setEditingId(null);
   };
 
   return (
     <div>
       <h1 className="text-3xl font-bold mb-6">Manage Subjects</h1>
 
-      {/* COURSE SELECTOR DROPDOWN */}
-      <div className="mb-8 p-6 bg-white rounded-lg shadow-md">
-        <label htmlFor="course-select" className="block text-lg font-medium mb-2">
-          Select Course:
-        </label>
-        <select
-          id="course-select"
+      {/* SELECT COURSE DROPDOWN */}
+      <div className="mb-8">
+        <label className="block text-gray-700 font-medium mb-2">Select Course</label>
+        <select 
+          className="w-full p-3 border rounded shadow-sm focus:ring-2 focus:ring-blue-500"
           value={selectedCourseId}
-          onChange={(e) => setSelectedCourseId(e.target.value)}
-          className="w-full p-3 border rounded-md"
+          onChange={(e) => {
+            setSelectedCourseId(e.target.value);
+            resetForm(); // Reset form when changing course
+          }}
         >
+          <option value="">-- Choose a Course --</option>
           {courses.map(course => (
-            <option key={course._id} value={course._id}>
-              {course.name}
-            </option>
+            <option key={course._id} value={course._id}>{course.name}</option>
           ))}
         </select>
       </div>
 
-      {/* We only show the forms if a course is selected */}
       {selectedCourseId && (
         <>
-          {/* CREATE SUBJECT FORM */}
-          <form onSubmit={handleCreateSubject} className="mb-8 p-6 bg-white rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold mb-3">Add Subject to {courses.find(c => c._id === selectedCourseId)?.name}</h2>
-            <div className="flex">
-              <input
-                type="text"
-                value={newSubjectName}
-                onChange={(e) => setNewSubjectName(e.target.value)}
-                placeholder="E.g., Environment"
-                className="flex-grow p-3 border rounded-l-md"
+          {/* FORM AREA */}
+          <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-l-4 border-blue-500">
+            <h2 className="text-xl font-semibold mb-4">
+              {editingId ? 'Edit Subject' : 'Add New Subject'}
+            </h2>
+            <form onSubmit={handleSubmit} className="flex gap-4">
+              <input 
+                type="text" 
+                value={name}
+                onChange={(e) => setName(e.target.value)}
+                placeholder="Subject Name (e.g. Thermodynamics)"
+                className="flex-1 p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                required
               />
-              <button type="submit" className="bg-blue-500 text-white p-3 rounded-r-md hover:bg-blue-600">
-                Create Subject
+              <button 
+                type="submit"
+                className={`px-6 py-2 text-white rounded font-medium
+                  ${editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}
+                `}
+              >
+                {editingId ? 'Update' : 'Add'}
               </button>
-            </div>
-          </form>
-
-          {/* LIST OF SUBJECTS FOR THIS COURSE */}
-          <div className="bg-white rounded-lg shadow-md">
-            <h2 className="text-xl font-semibold p-6 border-b">Existing Subjects</h2>
-            {loading && <p className="p-6">Loading...</p>}
-
-            <ul className="divide-y divide-gray-200">
-              {!loading && subjects.length === 0 && (
-                <p className="p-6 text-gray-500">No subjects found for this course.</p>
+              
+              {editingId && (
+                <button 
+                  type="button" 
+                  onClick={resetForm}
+                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                >
+                  Cancel
+                </button>
               )}
+            </form>
+          </div>
+
+          {/* SUBJECTS LIST */}
+          <div className="bg-white rounded-lg shadow-md p-6">
+            <h3 className="text-lg font-bold mb-4 border-b pb-2">Subjects in this Course</h3>
+            
+            {loading && <p>Loading subjects...</p>}
+            {!loading && subjects.length === 0 && <p className="text-gray-500">No subjects yet.</p>}
+            
+            <ul className="space-y-3">
               {subjects.map(subject => (
-                <li key={subject._id} className="flex justify-between items-center p-6">
-                  <span className="text-lg font-medium">{subject.name}</span>
-                  <button
-                    onClick={() => handleDeleteSubject(subject._id)}
-                    className="bg-red-500 text-white py-1 px-3 rounded-md hover:bg-red-600"
-                  >
-                    Delete
-                  </button>
+                <li key={subject._id} className="flex justify-between items-center bg-gray-50 p-3 rounded border">
+                  <span className="font-medium text-gray-800">{subject.name}</span>
+                  <div className="space-x-2">
+                    <button 
+                      onClick={() => handleEditClick(subject)}
+                      className="text-blue-600 hover:text-blue-800 font-medium px-2"
+                    >
+                      Edit
+                    </button>
+                    <button 
+                      onClick={() => handleDelete(subject._id)}
+                      className="text-red-600 hover:text-red-800 font-medium px-2"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 </li>
               ))}
             </ul>

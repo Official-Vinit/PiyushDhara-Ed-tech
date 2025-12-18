@@ -167,6 +167,55 @@ router.delete('/courses/:courseId', auth, async (req, res) => {
   }
 });
 
+// --- UPDATE COURSE ---
+router.put('/courses/:id', auth, async (req, res) => {
+  const { name,teacher, teacherImage } = req.body;
+
+  try {
+    // Find the course and update it with new data
+    const updatedCourse = await Course.findByIdAndUpdate(
+      req.params.id,
+      { name, teacher, teacherImage },
+      { new: true } // This option tells Mongoose to return the *updated* version
+    );
+
+    res.json(updatedCourse);
+  } catch (err) {
+    res.status(500).json({ msg: 'Server Error' });
+  }
+});
+
+// --- UPDATE SUBJECT ---
+router.put('/subjects/:id', auth, async (req, res) => {
+  const { name } = req.body;
+  try {
+    const updatedSubject = await Subject.findByIdAndUpdate(
+      req.params.id,
+      { name },
+      { new: true }
+    );
+    res.json(updatedSubject);
+  } catch (err) {
+    res.status(500).json({ msg: 'Server Error' });
+  }
+});
+
+// --- UPDATE UNIT ---
+router.put('/units/:id', auth, async (req, res) => {
+  const { name } = req.body;
+  try {
+    const updatedUnit = await Unit.findByIdAndUpdate(
+      req.params.id,
+      { name },
+      { new: true }
+    );
+    res.json(updatedUnit);
+  } catch (err) {
+    res.status(500).json({ msg: 'Server Error' });
+  }
+});
+
+
 /**
  * @route   POST /api/subjects
  * @desc    Create a new subject for a specific course
