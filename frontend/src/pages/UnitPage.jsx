@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import axios from 'axios';
-import API_URL from '../config'; 
+import API_URL from '../config';
 
 function UnitPage() {
   const { unitId } = useParams();
@@ -80,7 +80,6 @@ function UnitPage() {
                   </a>
                   <div className="p-4">
                     <h3 className="font-semibold">{video.title}</h3>
-                    <p className="text-sm text-gray-500">By Mrigank Sir</p>
                     <span className="text-xs text-gray-400 mt-2 block">{video.duration}</span>
                   </div>
                 </div>
