@@ -5,7 +5,9 @@ const Schema = mongoose.Schema;
 const SubjectSchema = new Schema({
   name: {
     type: String,
-    required: true
+    required: true,
+    trim: true,
+    maxlength: 140,
   },
   // Link back to the parent course
   course: {
@@ -18,6 +20,8 @@ const SubjectSchema = new Schema({
     type: Schema.Types.ObjectId,
     ref: 'Unit'
   }]
+}, {
+  timestamps: true,
 });
 
 module.exports = mongoose.model('Subject', SubjectSchema);

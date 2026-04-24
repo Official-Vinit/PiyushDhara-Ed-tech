@@ -5,6 +5,7 @@ import API_URL from '../config';
 
 function ManageCourses() {
   const [courses, setCourses] = useState([]);
+  const [status, setStatus] = useState({ type: '', text: '' });
   
   // Form States
   const [name, setName] = useState('');
@@ -20,37 +21,40 @@ function ManageCourses() {
     fetchCourses();
   }, []);
 
-  const fetchCourses = () => {
-    axios.get(`${API_URL}/api/courses`)
-      .then(res => setCourses(res.data))
-      .catch(err => console.error(err));
+  const fetchCourses = async () => {
+    try {
+      const res = await axios.get(`${API_URL}/api/courses`);
+      setCourses(Array.isArray(res.data) ? res.data : []);
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: 'error', text: 'Failed to load courses.' });
+    }
   };
 
   // --- HANDLE FORM SUBMIT (Create OR Update) ---
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
+    setStatus({ type: '', text: '' });
 
     const courseData = { name, description, teacher, teacherImage };
 
-    if (editingId) {
-      // --- UPDATE MODE ---
-      axios.put(`${API_URL}/api/courses/${editingId}`, courseData)
-        .then(res => {
-          // Update the list locally without refreshing
-          setCourses(courses.map(course => 
-            course._id === editingId ? res.data : course
-          ));
-          resetForm();
-        })
-        .catch(err => console.error(err));
-    } else {
-      // --- CREATE MODE ---
-      axios.post(`${API_URL}/api/courses`, courseData)
-        .then(res => {
-          setCourses([...courses, res.data]);
-          resetForm();
-        })
-        .catch(err => console.error(err));
+    try {
+      if (editingId) {
+        const res = await axios.put(`${API_URL}/api/courses/${editingId}`, courseData);
+        setCourses(courses.map((course) => (
+          course._id === editingId ? res.data : course
+        )));
+        setStatus({ type: 'success', text: 'Course updated successfully.' });
+      } else {
+        const res = await axios.post(`${API_URL}/api/courses`, courseData);
+        setCourses([...courses, res.data]);
+        setStatus({ type: 'success', text: 'Course created successfully.' });
+      }
+
+      resetForm();
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: 'error', text: err?.response?.data?.msg || 'Failed to save course.' });
     }
   };
 
@@ -67,11 +71,16 @@ function ManageCourses() {
   };
 
   // --- DELETE BUTTON CLICKED ---
-  const handleDeleteCourse = (id) => {
+  const handleDeleteCourse = async (id) => {
     if(!window.confirm("Are you sure? This will delete all subjects inside!")) return;
-    axios.delete(`${API_URL}/api/courses/${id}`)
-      .then(() => setCourses(courses.filter(c => c._id !== id)))
-      .catch(err => console.error(err));
+    try {
+      await axios.delete(`${API_URL}/api/courses/${id}`);
+      setCourses(courses.filter(c => c._id !== id));
+      setStatus({ type: 'success', text: 'Course deleted.' });
+    } catch (err) {
+      console.error(err);
+      setStatus({ type: 'error', text: 'Failed to delete course.' });
+    }
   };
 
   // --- RESET FORM ---
@@ -84,11 +93,23 @@ function ManageCourses() {
   };
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Manage Courses</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 md:text-3xl">Manage Courses</h1>
+        <p className="mt-1 text-sm text-slate-500">Create and maintain course-level metadata shown to learners.</p>
+      </div>
+
+      {status.text && (
+        <div className={`rounded-lg px-4 py-3 text-sm ${
+          status.type === 'error'
+            ? 'border border-rose-100 bg-rose-50 text-rose-700'
+            : 'border border-emerald-100 bg-emerald-50 text-emerald-700'
+        }`}>
+          {status.text}
+        </div>
+      )}
       
-      {/* --- FORM (Dynamic Title & Buttons) --- */}
-      <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-l-4 border-blue-500">
+      <div className="admin-card border-l-4 border-blue-500 p-6">
         <h2 className="text-xl font-semibold mb-4">
           {editingId ? 'Edit Course' : 'Add New Course'}
         </h2>
@@ -102,8 +123,18 @@ function ManageCourses() {
               type="text" 
               value={name} 
               onChange={(e) => setName(e.target.value)} 
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
+              className="admin-input" 
               required 
+            />
+          </div>
+
+          <div>
+            <label className="mb-1 block text-sm font-semibold text-slate-700">Description</label>
+            <textarea
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="admin-input min-h-24"
+              placeholder="Short summary about this course"
             />
           </div>
 
@@ -114,7 +145,7 @@ function ManageCourses() {
               type="text" 
               value={teacher} 
               onChange={(e) => setTeacher(e.target.value)} 
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
+              className="admin-input" 
             />
           </div>
 
@@ -125,16 +156,14 @@ function ManageCourses() {
               type="url" 
               value={teacherImage} 
               onChange={(e) => setTeacherImage(e.target.value)} 
-              className="w-full p-2 border rounded focus:ring-2 focus:ring-blue-500" 
+              className="admin-input" 
             />
           </div>
 
           <div className="flex space-x-3">
             <button 
               type="submit" 
-              className={`py-2 px-6 rounded font-medium text-white transition-colors
-                ${editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}
-              `}
+              className="admin-btn-primary"
             >
               {editingId ? 'Update Course' : 'Add Course'}
             </button>
@@ -144,7 +173,7 @@ function ManageCourses() {
               <button 
                 type="button" 
                 onClick={resetForm}
-                className="py-2 px-6 rounded font-medium bg-gray-300 text-gray-700 hover:bg-gray-400"
+                className="admin-btn-secondary"
               >
                 Cancel
               </button>
@@ -153,28 +182,26 @@ function ManageCourses() {
         </form>
       </div>
 
-      {/* --- EXISTING COURSES LIST --- */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
         {courses.map(course => (
-          <div key={course._id} className="bg-white p-6 rounded-lg shadow border flex justify-between items-center">
-            <div>
+          <div key={course._id} className="admin-card flex items-start justify-between gap-3 p-5">
+            <div className="min-w-0">
               <h3 className="text-xl font-bold text-blue-600">{course.name}</h3>
-              <p className="text-gray-600 text-sm">By {course.teacher || 'Mrigank Sir'}</p>
+              <p className="mt-1 text-sm text-slate-600">By {course.teacher || 'Faculty'}</p>
+              {course.description && <p className="mt-2 text-sm text-slate-500">{course.description}</p>}
             </div>
             
             <div className="flex space-x-2">
-              {/* EDIT BUTTON */}
               <button 
                 onClick={() => handleEditClick(course)}
-                className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded hover:bg-yellow-200 font-medium"
+                className="rounded-lg bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-200"
               >
                 Edit
               </button>
               
-              {/* DELETE BUTTON */}
               <button 
                 onClick={() => handleDeleteCourse(course._id)}
-                className="bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 font-medium"
+                className="admin-btn-danger"
               >
                 Delete
               </button>

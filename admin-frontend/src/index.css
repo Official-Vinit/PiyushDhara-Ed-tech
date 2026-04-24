@@ -1,3 +1,51 @@
+@import url('https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap');
+
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@layer base {
+	* {
+		box-sizing: border-box;
+	}
+
+	body {
+		margin: 0;
+		min-height: 100vh;
+		background: radial-gradient(circle at top left, rgba(37, 99, 235, 0.1), transparent 60%), #f1f5f9;
+		color: #0f172a;
+		font-family: 'Manrope', 'Segoe UI', sans-serif;
+		-webkit-font-smoothing: antialiased;
+		text-rendering: optimizeLegibility;
+	}
+
+	#root {
+		min-height: 100vh;
+	}
+}
+
+@layer components {
+	.admin-card {
+		@apply rounded-2xl border border-slate-200 bg-white shadow-sm;
+	}
+
+	.admin-input {
+		@apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 transition placeholder:text-slate-400 focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100;
+	}
+
+	.admin-select {
+		@apply w-full rounded-lg border border-slate-300 bg-white px-3 py-2 text-sm text-slate-800 transition focus:border-blue-400 focus:outline-none focus:ring-2 focus:ring-blue-100;
+	}
+
+	.admin-btn-primary {
+		@apply rounded-lg bg-blue-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60;
+	}
+
+	.admin-btn-secondary {
+		@apply rounded-lg bg-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-300;
+	}
+
+	.admin-btn-danger {
+		@apply rounded-lg bg-rose-100 px-3 py-1.5 text-sm font-semibold text-rose-700 transition hover:bg-rose-200;
+	}
+}
