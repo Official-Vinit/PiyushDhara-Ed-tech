@@ -1,5 +1,7 @@
 // server/routes/api.js
 const express = require('express');
+const { isValidObjectId } = require('mongoose');
+const rateLimit = require('express-rate-limit');
 const router = express.Router();
 
 // Import our models
@@ -8,34 +10,63 @@ const Subject = require('../models/Subject');
 const Unit = require('../models/Unit');
 
 const jwt = require('jsonwebtoken');
-require('dotenv').config();
 const auth = require('../middleware/auth');
+
+const loginLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { msg: 'Too many login attempts. Please try again later.' },
+});
+
+const trimString = (value) => (typeof value === 'string' ? value.trim() : '');
+
+const isHttpUrl = (value) => {
+  try {
+    const parsed = new URL(value);
+    return parsed.protocol === 'http:' || parsed.protocol === 'https:';
+  } catch {
+    return false;
+  }
+};
+
+const validateObjectId = (res, id, label) => {
+  if (!isValidObjectId(id)) {
+    res.status(400).json({ msg: `Invalid ${label}` });
+    return false;
+  }
+  return true;
+};
 
 
 // --- AUTH ROUTE ---
-router.post('/login', (req, res) => {
-  const { username, password } = req.body;
+router.post('/login', loginLimiter, (req, res) => {
+  const username = trimString(req.body?.username);
+  const password = req.body?.password;
 
-  // Check credentials against .env
-  if (
-    username === process.env.ADMIN_USERNAME && 
-    password === process.env.ADMIN_PASSWORD
-  ) {
-    // Success: Create a token
-    const payload = { user: { id: 'admin' } };
-
-    jwt.sign(
-      payload, 
-      process.env.JWT_SECRET, 
-      { expiresIn: '4h' }, // Token lasts for 4 hours
-      (err, token) => {
-        if (err) throw err;
-        res.json({ token });
-      }
-    );
-  } else {
-    res.status(400).json({ msg: 'Invalid Credentials' });
+  if (!process.env.ADMIN_USERNAME || !process.env.ADMIN_PASSWORD || !process.env.JWT_SECRET) {
+    return res.status(500).json({ msg: 'Auth is not configured on server.' });
   }
+
+  if (username !== process.env.ADMIN_USERNAME || password !== process.env.ADMIN_PASSWORD) {
+    return res.status(401).json({ msg: 'Invalid credentials' });
+  }
+
+  const payload = { user: { id: 'admin' } };
+
+  jwt.sign(
+    payload,
+    process.env.JWT_SECRET,
+    { expiresIn: '4h' },
+    (err, token) => {
+      if (err) {
+        console.error('Failed to sign auth token:', err);
+        return res.status(500).json({ msg: 'Token generation failed' });
+      }
+      return res.json({ token });
+    }
+  );
 });
 
 // --- COURSE ROUTES ---
@@ -48,7 +79,7 @@ router.get('/courses',  async (req, res) => {
   try {
     // Find all courses and populate their 'subjects' field
     // This replaces the Subject IDs with the actual Subject documents
-    const courses = await Course.find().populate('subjects');
+    const courses = await Course.find().sort({ createdAt: -1 }).populate('subjects');
     res.json(courses);
   } catch (err) {
     console.error(err.message);
@@ -57,6 +88,10 @@ router.get('/courses',  async (req, res) => {
 });
 
 router.get('/courses/:courseId', async (req, res) => {
+  if (!validateObjectId(res, req.params.courseId, 'course id')) {
+    return;
+  }
+
   try {
     const course = await Course.findById(req.params.courseId).populate({
       path: 'subjects', // First, populate the 'subjects' array
@@ -72,15 +107,15 @@ router.get('/courses/:courseId', async (req, res) => {
     res.json(course);
   } catch (err) {
     console.error(err.message);
-    // This handles cases where the ID is not a valid format
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Course not found' });
-    }
     res.status(500).send('Server Error');
   }
 });
 
 router.get('/units/:unitId', async (req, res) => {
+  if (!validateObjectId(res, req.params.unitId, 'unit id')) {
+    return;
+  }
+
   try {
     // We need to populate the 'subject' field to get the subject's name
     // And then populate the 'course' field inside the subject
@@ -98,9 +133,6 @@ router.get('/units/:unitId', async (req, res) => {
     res.json(unit);
   } catch (err) {
     console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Unit not found' });
-    }
     res.status(500).send('Server Error');
   }
 });
@@ -112,15 +144,23 @@ router.get('/units/:unitId', async (req, res) => {
 router.post('/courses', auth, async (req, res) => {
 
   try {
-  const { name, description, teacher, teacherImage } = req.body;
+    const name = trimString(req.body?.name);
+    const description = trimString(req.body?.description);
+    const teacher = trimString(req.body?.teacher);
+    const teacherImage = trimString(req.body?.teacherImage);
 
     if (!name) {
       return res.status(400).json({ msg: 'Please provide a name for the course' });
     }
 
+    if (teacherImage && !isHttpUrl(teacherImage)) {
+      return res.status(400).json({ msg: 'Please provide a valid teacher image URL' });
+    }
+
     // Create a new course instance
     const newCourse = new Course({
-      name: name,
+      name,
+      description,
       teacher: teacher || 'Gaurav Sir',
       teacherImage: teacherImage || ''
       // subjects array is empty by default
@@ -143,6 +183,10 @@ router.post('/courses', auth, async (req, res) => {
  * @desc    Delete a course
  */
 router.delete('/courses/:courseId', auth, async (req, res) => {
+  if (!validateObjectId(res, req.params.courseId, 'course id')) {
+    return;
+  }
+
   try {
     const course = await Course.findById(req.params.courseId);
 
@@ -150,79 +194,154 @@ router.delete('/courses/:courseId', auth, async (req, res) => {
       return res.status(404).json({ msg: 'Course not found' });
     }
 
-    // TODO: In a real app, we'd also need to delete all
-    // associated subjects and units, which is a bit complex.
-    // For now, we'll just delete the course itself.
+    const subjects = await Subject.find({ course: course._id }).select('_id');
+    const subjectIds = subjects.map((subject) => subject._id);
+
+    if (subjectIds.length > 0) {
+      await Unit.deleteMany({ subject: { $in: subjectIds } });
+      await Subject.deleteMany({ _id: { $in: subjectIds } });
+    }
 
     await course.deleteOne();
 
-    res.json({ msg: 'Course removed successfully' });
+    res.json({ msg: 'Course and related content removed successfully' });
 
   } catch (err) {
     console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Course not found' });
-    }
     res.status(500).send('Server Error');
   }
 });
 
 // --- UPDATE COURSE ---
 router.put('/courses/:id', auth, async (req, res) => {
-  const { name,teacher, teacherImage } = req.body;
+  if (!validateObjectId(res, req.params.id, 'course id')) {
+    return;
+  }
 
   try {
+    const updates = {};
+    if (req.body?.name !== undefined) {
+      const cleanedName = trimString(req.body.name);
+      if (!cleanedName) {
+        return res.status(400).json({ msg: 'Course name cannot be empty' });
+      }
+      updates.name = cleanedName;
+    }
+
+    if (req.body?.description !== undefined) {
+      updates.description = trimString(req.body.description);
+    }
+
+    if (req.body?.teacher !== undefined) {
+      updates.teacher = trimString(req.body.teacher) || 'Gaurav Sir';
+    }
+
+    if (req.body?.teacherImage !== undefined) {
+      const cleanedImageUrl = trimString(req.body.teacherImage);
+      if (cleanedImageUrl && !isHttpUrl(cleanedImageUrl)) {
+        return res.status(400).json({ msg: 'Please provide a valid teacher image URL' });
+      }
+      updates.teacherImage = cleanedImageUrl;
+    }
+
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ msg: 'No updates were provided' });
+    }
+
     // Find the course and update it with new data
     const updatedCourse = await Course.findByIdAndUpdate(
       req.params.id,
-      { name, teacher, teacherImage },
-      { new: true } // This option tells Mongoose to return the *updated* version
+      updates,
+      { new: true, runValidators: true } // This option tells Mongoose to return the *updated* version
     );
 
-    res.json(updatedCourse);
+    if (!updatedCourse) {
+      return res.status(404).json({ msg: 'Course not found' });
+    }
+
+    return res.json(updatedCourse);
   } catch (err) {
-    res.status(500).json({ msg: 'Server Error' });
+    console.error(err.message);
+    return res.status(500).json({ msg: 'Server Error' });
   }
 });
 
 // --- UPDATE SUBJECT ---
 router.put('/subjects/:id', auth, async (req, res) => {
-  const { name } = req.body;
+  if (!validateObjectId(res, req.params.id, 'subject id')) {
+    return;
+  }
+
+  const name = trimString(req.body?.name);
+  if (!name) {
+    return res.status(400).json({ msg: 'Subject name cannot be empty' });
+  }
+
   try {
     const updatedSubject = await Subject.findByIdAndUpdate(
       req.params.id,
       { name },
-      { new: true }
+      { new: true, runValidators: true }
     );
-    res.json(updatedSubject);
+
+    if (!updatedSubject) {
+      return res.status(404).json({ msg: 'Subject not found' });
+    }
+
+    return res.json(updatedSubject);
   } catch (err) {
-    res.status(500).json({ msg: 'Server Error' });
+    console.error(err.message);
+    return res.status(500).json({ msg: 'Server Error' });
   }
 });
 
 // --- UPDATE UNIT ---
 router.put('/units/:id', auth, async (req, res) => {
-  const { name } = req.body;
+  if (!validateObjectId(res, req.params.id, 'unit id')) {
+    return;
+  }
+
+  const name = trimString(req.body?.name);
+  if (!name) {
+    return res.status(400).json({ msg: 'Unit name cannot be empty' });
+  }
+
   try {
     const updatedUnit = await Unit.findByIdAndUpdate(
       req.params.id,
       { name },
-      { new: true }
+      { new: true, runValidators: true }
     );
-    res.json(updatedUnit);
+
+    if (!updatedUnit) {
+      return res.status(404).json({ msg: 'Unit not found' });
+    }
+
+    return res.json(updatedUnit);
   } catch (err) {
-    res.status(500).json({ msg: 'Server Error' });
+    console.error(err.message);
+    return res.status(500).json({ msg: 'Server Error' });
   }
 });
 
 // --- GET SINGLE SUBJECT (WITH UNITS) ---
 router.get('/subjects/:id', async (req, res) => {
+  if (!validateObjectId(res, req.params.id, 'subject id')) {
+    return;
+  }
+
   try {
     // .populate('units') is the magic word that grabs the full unit details
     const subject = await Subject.findById(req.params.id).populate('units');
-    res.json(subject);
+
+    if (!subject) {
+      return res.status(404).json({ msg: 'Subject not found' });
+    }
+
+    return res.json(subject);
   } catch (err) {
-    res.status(500).json({ msg: 'Server Error' });
+    console.error(err.message);
+    return res.status(500).json({ msg: 'Server Error' });
   }
 });
 
@@ -233,10 +352,15 @@ router.get('/subjects/:id', async (req, res) => {
  */
 router.post('/subjects', auth, async (req, res) => {
   // We need two things: the name, and the ID of the course it belongs to
-  const { name, courseId } = req.body;
+  const name = trimString(req.body?.name);
+  const courseId = req.body?.courseId;
 
   if (!name || !courseId) {
     return res.status(400).json({ msg: 'Please provide a name and courseId' });
+  }
+
+  if (!validateObjectId(res, courseId, 'course id')) {
+    return;
   }
 
   try {
@@ -248,7 +372,7 @@ router.post('/subjects', auth, async (req, res) => {
 
     // Create the new subject
     const newSubject = new Subject({
-      name: name,
+      name,
       course: courseId
       // units array is empty by default
     });
@@ -274,6 +398,10 @@ router.post('/subjects', auth, async (req, res) => {
  * @desc    Delete a subject
  */
 router.delete('/subjects/:subjectId', auth, async (req, res) => {
+  if (!validateObjectId(res, req.params.subjectId, 'subject id')) {
+    return;
+  }
+
   try {
     const subject = await Subject.findById(req.params.subjectId);
 
@@ -286,18 +414,15 @@ router.delete('/subjects/:subjectId', auth, async (req, res) => {
       $pull: { subjects: subject._id } // $pull removes an item from an array
     });
 
-    // TODO: In a real app, we'd also delete all associated units.
+    await Unit.deleteMany({ subject: subject._id });
 
     // Now, delete the subject itself
     await subject.deleteOne();
 
-    res.json({ msg: 'Subject removed successfully' });
+    res.json({ msg: 'Subject and related units removed successfully' });
 
   } catch (err) {
     console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Subject not found' });
-    }
     res.status(500).send('Server Error');
   }
 });
@@ -308,10 +433,15 @@ router.delete('/subjects/:subjectId', auth, async (req, res) => {
  */
 router.post('/units', auth, async (req, res) => {
   // We need the unit's name and the ID of the subject it belongs to
-  const { name, subjectId } = req.body;
+  const name = trimString(req.body?.name);
+  const subjectId = req.body?.subjectId;
 
   if (!name || !subjectId) {
     return res.status(400).json({ msg: 'Please provide a name and subjectId' });
+  }
+
+  if (!validateObjectId(res, subjectId, 'subject id')) {
+    return;
   }
 
   try {
@@ -323,7 +453,7 @@ router.post('/units', auth, async (req, res) => {
 
     // Create the new unit
     const newUnit = new Unit({
-      name: name,
+      name,
       subject: subjectId
       // videos and notes arrays are empty by default
     });
@@ -349,6 +479,10 @@ router.post('/units', auth, async (req, res) => {
  * @desc    Delete a unit
  */
 router.delete('/units/:unitId', auth, async (req, res) => {
+  if (!validateObjectId(res, req.params.unitId, 'unit id')) {
+    return;
+  }
+
   try {
     const unit = await Unit.findById(req.params.unitId);
 
@@ -368,9 +502,6 @@ router.delete('/units/:unitId', auth, async (req, res) => {
 
   } catch (err) {
     console.error(err.message);
-    if (err.kind === 'ObjectId') {
-      return res.status(404).json({ msg: 'Unit not found' });
-    }
     res.status(500).send('Server Error');
   }
 });
@@ -381,10 +512,20 @@ router.delete('/units/:unitId', auth, async (req, res) => {
  */
 router.put('/units/:unitId/videos', auth, async (req, res) => {
   // Get the video details from the request body
-  const { title, youtubeId, duration } = req.body;
+  if (!validateObjectId(res, req.params.unitId, 'unit id')) {
+    return;
+  }
+
+  const title = trimString(req.body?.title);
+  const youtubeId = trimString(req.body?.youtubeId);
+  const duration = trimString(req.body?.duration);
 
   if (!title || !youtubeId) {
     return res.status(400).json({ msg: 'Please provide a title and youtubeId' });
+  }
+
+  if (!/^[a-zA-Z0-9_-]{11}$/.test(youtubeId)) {
+    return res.status(400).json({ msg: 'Please provide a valid 11-character YouTube ID' });
   }
 
   try {
@@ -412,14 +553,22 @@ router.put('/units/:unitId/videos', auth, async (req, res) => {
  * @desc    Delete a video from a unit
  */
 router.delete('/units/:unitId/videos/:videoId', auth, async (req, res) => {
+  if (!validateObjectId(res, req.params.unitId, 'unit id') || !validateObjectId(res, req.params.videoId, 'video id')) {
+    return;
+  }
+
   try {
     const unit = await Unit.findById(req.params.unitId);
     if (!unit) {
       return res.status(404).json({ msg: 'Unit not found' });
     }
 
-    // Find the video by its ID and remove it
-    unit.videos.pull({ _id: req.params.videoId });
+    const video = unit.videos.id(req.params.videoId);
+    if (!video) {
+      return res.status(404).json({ msg: 'Video not found' });
+    }
+
+    video.deleteOne();
 
     await unit.save();
     res.json(unit.videos); // Send back the updated videos array
@@ -435,10 +584,19 @@ router.delete('/units/:unitId/videos/:videoId', auth, async (req, res) => {
  * @desc    Add a note to a unit
  */
 router.put('/units/:unitId/notes', auth, async (req, res) => {
-  const { title, url } = req.body;
+  if (!validateObjectId(res, req.params.unitId, 'unit id')) {
+    return;
+  }
+
+  const title = trimString(req.body?.title);
+  const url = trimString(req.body?.url);
 
   if (!title || !url) {
     return res.status(400).json({ msg: 'Please provide a title and url' });
+  }
+
+  if (!isHttpUrl(url)) {
+    return res.status(400).json({ msg: 'Please provide a valid note URL' });
   }
 
   try {
@@ -465,14 +623,22 @@ router.put('/units/:unitId/notes', auth, async (req, res) => {
  * @desc    Delete a note from a unit
  */
 router.delete('/units/:unitId/notes/:noteId', auth, async (req, res) => {
+  if (!validateObjectId(res, req.params.unitId, 'unit id') || !validateObjectId(res, req.params.noteId, 'note id')) {
+    return;
+  }
+
   try {
     const unit = await Unit.findById(req.params.unitId);
     if (!unit) {
       return res.status(404).json({ msg: 'Unit not found' });
     }
 
-    // Find the note by its ID and remove it
-    unit.notes.pull({ _id: req.params.noteId });
+    const note = unit.notes.id(req.params.noteId);
+    if (!note) {
+      return res.status(404).json({ msg: 'Note not found' });
+    }
+
+    note.deleteOne();
 
     await unit.save();
     res.json(unit.notes); // Send back the updated notes array
@@ -484,6 +650,10 @@ router.delete('/units/:unitId/notes/:noteId', auth, async (req, res) => {
 });
 
 router.post('/seed', auth, async (req, res) => {
+  if (process.env.NODE_ENV === 'production' && process.env.ALLOW_SEED !== 'true') {
+    return res.status(403).json({ msg: 'Seed route is disabled in production' });
+  }
+
   try {
     // Clear existing data
     await Course.deleteMany({});
@@ -498,7 +668,6 @@ router.post('/seed', auth, async (req, res) => {
     const subject2 = new Subject({ name: 'Hydraulics', course: course1._id });
 
     // 3. Create Units for Subject 1
-    // And change it to this:
     const unit1 = new Unit({
       name: 'CH 01: Water Demand',
       subject: subject1._id,

@@ -6,32 +6,41 @@ const Schema = mongoose.Schema;
 const VideoSchema = new Schema({
   title: {
     type: String,
-    required: true
+    required: true,
+    trim: true,
+    maxlength: 180,
   },
   youtubeId: {
     type: String,
-    required: true
+    required: true,
+    trim: true,
   },
   duration: { // Good to have, like in your screenshot
-    type: String 
+    type: String,
+    trim: true,
   }
 });
 
 const NoteSchema = new Schema({
   title: {
     type: String,
-    required: true
+    required: true,
+    trim: true,
+    maxlength: 220,
   },
   url: {
     type: String,
-    required: true
+    required: true,
+    trim: true,
   }
 });
 
 const UnitSchema = new Schema({
   name: {
     type: String,
-    required: true
+    required: true,
+    trim: true,
+    maxlength: 180,
   },
   // Link back to the parent subject
   subject: {
@@ -41,6 +50,8 @@ const UnitSchema = new Schema({
   },
   notes: [NoteSchema],
   videos: [VideoSchema] // An array of videos
+}, {
+  timestamps: true,
 });
 
 module.exports = mongoose.model('Unit', UnitSchema);

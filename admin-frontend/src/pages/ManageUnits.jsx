@@ -10,6 +10,7 @@ function ManageUnits() {
   const [subjects, setSubjects] = useState([]);
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [units, setUnits] = useState([]);
+  const [status, setStatus] = useState({ type: '', text: '' });
   
   const [name, setName] = useState(''); // Form input
   const [editingId, setEditingId] = useState(null); // ID of unit being renamed
@@ -18,7 +19,10 @@ function ManageUnits() {
   useEffect(() => {
     axios.get(`${API_URL}/api/courses`)
       .then(res => setCourses(res.data))
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.error(err);
+        setStatus({ type: 'error', text: 'Failed to load courses.' });
+      });
   }, []);
 
   // 2. Fetch Subjects when Course changes
@@ -26,7 +30,10 @@ function ManageUnits() {
     if (selectedCourseId) {
       axios.get(`${API_URL}/api/courses/${selectedCourseId}`)
         .then(res => setSubjects(res.data.subjects || []))
-        .catch(err => console.error(err));
+        .catch(err => {
+          console.error(err);
+          setStatus({ type: 'error', text: 'Failed to load subjects for selected course.' });
+        });
     } else {
       setSubjects([]);
     }
@@ -49,13 +56,17 @@ function ManageUnits() {
     // Let's assume fetching the subject gives us populated units.
     axios.get(`${API_URL}/api/subjects/${selectedSubjectId}`)
       .then(res => setUnits(res.data.units || []))
-      .catch(err => console.error(err));
+      .catch(err => {
+        console.error(err);
+        setStatus({ type: 'error', text: 'Failed to load units.' });
+      });
   };
 
   // 4. Handle Submit (Create or Update)
   const handleSubmit = (e) => {
     e.preventDefault();
     if (!selectedSubjectId) return alert("Select a subject first");
+    setStatus({ type: '', text: '' });
 
     if (editingId) {
       // --- UPDATE MODE ---
@@ -64,16 +75,24 @@ function ManageUnits() {
           // Update local list
           setUnits(units.map(u => u._id === editingId ? res.data : u));
           resetForm();
+          setStatus({ type: 'success', text: 'Unit updated successfully.' });
         })
-        .catch(err => console.error(err));
+        .catch(err => {
+          console.error(err);
+          setStatus({ type: 'error', text: 'Failed to update unit.' });
+        });
     } else {
       // --- CREATE MODE ---
       axios.post(`${API_URL}/api/units`, { name, subjectId: selectedSubjectId })
         .then(res => {
           setUnits([...units, res.data]);
           resetForm();
+          setStatus({ type: 'success', text: 'Unit created successfully.' });
         })
-        .catch(err => console.error(err));
+        .catch(err => {
+          console.error(err);
+          setStatus({ type: 'error', text: err?.response?.data?.msg || 'Failed to create unit.' });
+        });
     }
   };
 
@@ -86,8 +105,14 @@ function ManageUnits() {
   const handleDelete = (id) => {
     if(!window.confirm("Delete this unit? All videos inside will be lost!")) return;
     axios.delete(`${API_URL}/api/units/${id}`)
-      .then(() => setUnits(units.filter(u => u._id !== id)))
-      .catch(err => console.error(err));
+      .then(() => {
+        setUnits(units.filter(u => u._id !== id));
+        setStatus({ type: 'success', text: 'Unit deleted.' });
+      })
+      .catch(err => {
+        console.error(err);
+        setStatus({ type: 'error', text: 'Failed to delete unit.' });
+      });
   };
 
   const resetForm = () => {
@@ -96,15 +121,28 @@ function ManageUnits() {
   };
 
   return (
-    <div>
-      <h1 className="text-3xl font-bold mb-6">Manage Units</h1>
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-extrabold tracking-tight text-slate-900 md:text-3xl">Manage Units</h1>
+        <p className="mt-1 text-sm text-slate-500">Manage topic-level units and navigate to unit content editor.</p>
+      </div>
+
+      {status.text && (
+        <div className={`rounded-lg px-4 py-3 text-sm ${
+          status.type === 'error'
+            ? 'border border-rose-100 bg-rose-50 text-rose-700'
+            : 'border border-emerald-100 bg-emerald-50 text-emerald-700'
+        }`}>
+          {status.text}
+        </div>
+      )}
 
       {/* DROPDOWNS */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
         <div>
-          <label className="block text-gray-700 font-medium mb-2">Select Course</label>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">Select Course</label>
           <select 
-            className="w-full p-3 border rounded shadow-sm"
+            className="admin-select"
             value={selectedCourseId}
             onChange={(e) => {
               setSelectedCourseId(e.target.value);
@@ -118,9 +156,9 @@ function ManageUnits() {
         </div>
 
         <div>
-          <label className="block text-gray-700 font-medium mb-2">Select Subject</label>
+          <label className="mb-2 block text-sm font-semibold text-slate-700">Select Subject</label>
           <select 
-            className="w-full p-3 border rounded shadow-sm"
+            className="admin-select"
             value={selectedSubjectId}
             onChange={(e) => {
               setSelectedSubjectId(e.target.value);
@@ -137,7 +175,7 @@ function ManageUnits() {
       {selectedSubjectId && (
         <>
           {/* FORM */}
-          <div className="bg-white p-6 rounded-lg shadow-md mb-8 border-l-4 border-blue-500">
+          <div className="admin-card border-l-4 border-blue-500 p-6">
              <h2 className="text-xl font-semibold mb-4">
               {editingId ? 'Rename Unit' : 'Add New Unit'}
             </h2>
@@ -147,14 +185,12 @@ function ManageUnits() {
                 value={name}
                 onChange={(e) => setName(e.target.value)}
                 placeholder="Unit Name (e.g. Unit 1: Introduction)"
-                className="flex-1 p-2 border rounded focus:ring-2 focus:ring-blue-500"
+                className="admin-input flex-1"
                 required
               />
               <button 
                 type="submit" 
-                className={`px-6 py-2 text-white rounded font-medium
-                  ${editingId ? 'bg-blue-600 hover:bg-blue-700' : 'bg-green-600 hover:bg-green-700'}
-                `}
+                className="admin-btn-primary"
               >
                 {editingId ? 'Update' : 'Add'}
               </button>
@@ -162,7 +198,7 @@ function ManageUnits() {
                 <button 
                   type="button" 
                   onClick={resetForm} 
-                  className="px-4 py-2 bg-gray-300 text-gray-700 rounded hover:bg-gray-400"
+                  className="admin-btn-secondary"
                 >
                   Cancel
                 </button>
@@ -171,43 +207,40 @@ function ManageUnits() {
           </div>
 
           {/* LIST */}
-          <div className="bg-white rounded-lg shadow-md p-6">
+          <div className="admin-card p-6">
             <h3 className="text-lg font-bold mb-4 border-b pb-2">Units in this Subject</h3>
-            {units.length === 0 && <p className="text-gray-500">No units found.</p>}
+            {units.length === 0 && <p className="text-slate-500">No units found.</p>}
             
             <ul className="space-y-3">
               {units.map((unit, index) => (
-                <li key={unit._id} className="flex flex-col md:flex-row justify-between items-center bg-gray-50 p-4 rounded border">
+                <li key={unit._id} className="flex flex-col items-start justify-between rounded-xl border border-slate-200 bg-slate-50 p-4 md:flex-row md:items-center">
                   
                   <div className="mb-2 md:mb-0">
-                    <span className="font-bold text-gray-400 mr-3">#{index + 1}</span>
-                    <span className="font-medium text-lg text-gray-800">{unit.name}</span>
-                    <span className="text-xs text-gray-500 block md:inline md:ml-2">
+                    <span className="mr-3 font-bold text-slate-400">#{index + 1}</span>
+                    <span className="text-lg font-medium text-slate-800">{unit.name}</span>
+                    <span className="block text-xs text-slate-500 md:ml-2 md:inline">
                        ({unit.videos.length} Videos)
                     </span>
                   </div>
 
                   <div className="flex space-x-2">
-                    {/* BUTTON TO ADD VIDEOS (Keeps existing functionality) */}
                     <Link 
                       to={`/unit/${unit._id}`}
-                      className="bg-indigo-100 text-indigo-700 px-3 py-1 rounded hover:bg-indigo-200 font-medium text-sm flex items-center"
+                      className="rounded-lg bg-indigo-100 px-3 py-1.5 text-sm font-semibold text-indigo-700 transition hover:bg-indigo-200"
                     >
                       Manage Videos
                     </Link>
 
-                    {/* EDIT NAME BUTTON */}
                     <button 
                       onClick={() => handleEditClick(unit)}
-                      className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded hover:bg-yellow-200 font-medium text-sm"
+                      className="rounded-lg bg-amber-100 px-3 py-1.5 text-sm font-semibold text-amber-700 transition hover:bg-amber-200"
                     >
                       Rename
                     </button>
 
-                    {/* DELETE BUTTON */}
                     <button 
                       onClick={() => handleDelete(unit._id)}
-                      className="bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 font-medium text-sm"
+                      className="admin-btn-danger"
                     >
                       Delete
                     </button>

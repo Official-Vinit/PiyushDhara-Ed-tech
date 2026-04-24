@@ -14,108 +14,170 @@ function UnitPage() {
   const [activeTab, setActiveTab] = useState('lectures');
 
   useEffect(() => {
-    setLoading(true);
-    axios.get(`${API_URL}/api/units/${unitId}`)
-      .then(response => {
-        setUnit(response.data);
-        setLoading(false);
-      })
-      .catch(error => {
-        console.error('Error fetching unit data:', error);
-        setError('Failed to load unit data.');
-        setLoading(false);
-      });
+    let ignore = false;
+
+    const fetchUnit = async () => {
+      try {
+        setLoading(true);
+        setError(null);
+
+        const response = await axios.get(`${API_URL}/api/units/${unitId}`);
+        if (!ignore) {
+          setUnit(response.data);
+        }
+      } catch (requestError) {
+        console.error('Error fetching unit data:', requestError);
+        if (!ignore) {
+          setError('Failed to load this unit. Please try again.');
+        }
+      } finally {
+        if (!ignore) {
+          setLoading(false);
+        }
+      }
+    };
+
+    fetchUnit();
+
+    return () => {
+      ignore = true;
+    };
   }, [unitId]); // Re-fetch if the unitId in the URL changes
 
-  if (loading) return <div className="p-4">Loading unit...</div>;
-  if (error) return <div className="p-4 text-red-500">{error}</div>;
-  if (!unit) return <div className="p-4">Unit not found.</div>;
+  if (loading) {
+    return (
+      <div className="surface-card space-y-4 p-6 md:p-8">
+        <div className="h-8 w-1/3 animate-pulse rounded bg-slate-100" />
+        <div className="h-5 w-1/4 animate-pulse rounded bg-slate-100" />
+        <div className="h-28 w-full animate-pulse rounded-xl bg-slate-100" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return <div className="surface-card border-rose-200 bg-rose-50 p-6 text-rose-700">{error}</div>;
+  }
+
+  if (!unit) {
+    return <div className="surface-card p-8 text-center text-slate-600">Unit not found.</div>;
+  }
 
   // Helper function to get a YouTube thumbnail
   const getThumbnailUrl = (youtubeId) => {
     return `https://img.youtube.com/vi/${youtubeId}/mqdefault.jpg`;
   };
 
+  const videos = unit.videos || [];
+  const notes = unit.notes || [];
+  const subjectName = unit.subject?.name || 'Subject';
+  const courseName = unit.subject?.course?.name || 'Course';
+  const courseId = unit.subject?.course?._id;
+
   return (
-    <div>
-      {/* Breadcrumb Navigation */}
-      <nav className="text-sm text-gray-500 mb-4">
-        <Link to={`/courses/${unit.subject.course._id}`} className="hover:underline">
-          {unit.subject.course.name}
-        </Link>
-        <span className="mx-2">&gt;</span>
-        <span>{unit.subject.name}</span>
+    <div className="space-y-6">
+      <nav className="flex items-center gap-2 text-sm text-slate-500">
+        {courseId ? (
+          <Link to={`/courses/${courseId}`} className="font-medium text-blue-700 hover:text-blue-800 hover:underline">
+            {courseName}
+          </Link>
+        ) : (
+          <span>{courseName}</span>
+        )}
+        <span>/</span>
+        <span>{subjectName}</span>
       </nav>
 
-      {/* Header */}
-      <h1 className="text-3xl font-bold mb-4">{unit.name}</h1>
+      <section className="surface-card bg-gradient-to-r from-blue-50 via-white to-blue-50 p-6 md:p-8">
+        <span className="inline-flex rounded-full bg-white px-3 py-1 text-xs font-semibold uppercase tracking-wide text-blue-700 ring-1 ring-blue-100">
+          Unit Workspace
+        </span>
+        <h1 className="mt-3 text-2xl font-extrabold tracking-tight text-slate-900 md:text-3xl">{unit.name}</h1>
+        <p className="mt-2 text-sm text-slate-600 md:text-base">
+          {videos.length} lectures and {notes.length} notes curated for this topic.
+        </p>
+      </section>
 
-      {/* Tabs: Lectures, Notes, etc. */}
-      <nav className="flex border-b mb-6">
-        <button
-          onClick={() => setActiveTab('lectures')}
-          className={`py-3 px-6 font-medium ${activeTab === 'lectures' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
-        >
-          Lectures
-        </button>
-        <button
-          onClick={() => setActiveTab('notes')}
-          className={`py-3 px-6 font-medium ${activeTab === 'notes' ? 'border-b-2 border-blue-500 text-blue-500' : 'text-gray-500'}`}
-        >
-          Notes
-        </button>
-        {/* You can add DPPs and DPP Sol. tabs here later */}
-      </nav>
+      <section className="surface-card p-2">
+        <nav className="flex gap-2">
+          <button
+            onClick={() => setActiveTab('lectures')}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold transition md:px-5 md:py-2.5 ${
+              activeTab === 'lectures'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700'
+            }`}
+          >
+            Lectures
+          </button>
+          <button
+            onClick={() => setActiveTab('notes')}
+            className={`rounded-xl px-4 py-2 text-sm font-semibold transition md:px-5 md:py-2.5 ${
+              activeTab === 'notes'
+                ? 'bg-blue-600 text-white shadow-sm'
+                : 'bg-slate-100 text-slate-600 hover:bg-blue-50 hover:text-blue-700'
+            }`}
+          >
+            Notes
+          </button>
+        </nav>
+      </section>
 
-      {/* Tab Content */}
-      <div>
-        {/* LECTURES TAB */}
+      <section>
         {activeTab === 'lectures' && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-            {unit.videos.length > 0 ? (
-              unit.videos.map((video, index) => (
-                <div key={index} className="border rounded-lg shadow-sm overflow-hidden">
+          <div className="grid grid-cols-1 gap-6 md:grid-cols-2 xl:grid-cols-3">
+            {videos.length > 0 ? (
+              videos.map((video, index) => (
+                <article key={`${video.youtubeId}-${index}`} className="surface-card overflow-hidden transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md">
                   <a href={`https://www.youtube.com/watch?v=${video.youtubeId}`} target="_blank" rel="noopener noreferrer">
-                    <img src={getThumbnailUrl(video.youtubeId)} alt={video.title} className="w-full h-auto" />
+                    <img src={getThumbnailUrl(video.youtubeId)} alt={video.title} className="h-44 w-full object-cover" />
                   </a>
-                  <div className="p-4">
-                    <h3 className="font-semibold">{video.title}</h3>
-                    <span className="text-xs text-gray-400 mt-2 block">{video.duration}</span>
+                  <div className="space-y-2 p-4">
+                    <h3 className="text-base font-semibold text-slate-800">{video.title}</h3>
+                    <div className="flex items-center justify-between text-xs text-slate-500">
+                      <span>{video.duration || 'Duration not specified'}</span>
+                      <a
+                        href={`https://www.youtube.com/watch?v=${video.youtubeId}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="font-semibold text-blue-700 hover:text-blue-800"
+                      >
+                        Watch
+                      </a>
+                    </div>
                   </div>
-                </div>
+                </article>
               ))
             ) : (
-              <p>No videos available for this unit.</p>
+              <div className="surface-card border-dashed p-8 text-center text-slate-500 md:col-span-2 xl:col-span-3">
+                No videos available for this unit.
+              </div>
             )}
           </div>
         )}
-        {/* NOTES TAB */}
+
         {activeTab === 'notes' && (
-          <div className="space-y-4 p-4">
-            {/* Check if the notes array exists and has items */}
-            {unit.notes && unit.notes.length > 0 ? (
-              unit.notes.map((note, index) => (
+          <div className="space-y-3">
+            {notes.length > 0 ? (
+              notes.map((note, index) => (
                 <a
-                  key={index}
+                  key={`${note.url}-${index}`}
                   href={note.url}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex items-center bg-blue-500 text-white font-semibold py-3 px-5 rounded-lg hover:bg-blue-600 transition-colors shadow"
+                  className="surface-card flex items-center justify-between p-4 transition hover:-translate-y-0.5 hover:border-blue-200 hover:shadow-md"
                 >
-                  {/* This is the title you wanted from the drive */}
-                  <span className="flex-1">{note.title}</span>
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 ml-3" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14" />
-                  </svg>
+                  <span className="text-sm font-semibold text-slate-800 md:text-base">{note.title}</span>
+                  <span className="rounded-lg bg-blue-600 px-3 py-1 text-xs font-semibold text-white">Open</span>
                 </a>
               ))
             ) : (
-              // Show this if the array is empty
-              <p className="text-gray-500">No PDF notes are available for this unit.</p>
+              <div className="surface-card border-dashed p-8 text-center text-slate-500">
+                No PDF notes are available for this unit.
+              </div>
             )}
           </div>
         )}
-      </div>
+      </section>
     </div>
   );
 }
