@@ -143,7 +143,7 @@ For questions, suggestions, or collaboration, contact the PiyushDhara team.
 ```text
 Organization: PiyushDhara
 Email: officialvinit1176@gmail.com
-Website: https://piyushdhara.com
+Website: https://piyush-dhara-ed-tech.vercel.app/courses/6947e7b345f93b8054f71614
 ```
 
 ## Acknowledgements
